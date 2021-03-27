@@ -1,11 +1,9 @@
-# CountLoops
-NN to count the number of loops in an RGB image of some text.
+# MATSC-ConvNN
+Generalization of the CountLoops project. Our goal is to create a ConvNN that uses low-length simulations of metals under an applied load to understand their micromechanical response.
 
-### train_loop_counter_CNN
+### trainer
 
-Train neural network to estimate the number of enclosed spaces in a given text image
-To Call:
-python ./train_loop_counter_CNN.py
+Train neural network 
 
 Args:
 *    epoch = 100:        [0-9]+
@@ -16,11 +14,9 @@ Args:
 *    learn rate = 0.01:    lr0\.[0-9]+
 *    model = "./loops_counter_net.pth": \./.+\.pth
 
-### test_loop_counter_CNN
+### tester
 
-Test neural network to estimate the number of enclosed spaces in a given text image
-To Call:
-python ./train_loop_counter_CNN.py
+Test neural network
 
 Args:
 *    batch size = 1000:  b[0-9]+
@@ -54,6 +50,4 @@ Args:
 *    display = False:    d | [^d]
 *    append = False:     + | [^+]
 
-### data/dataset_definitions
-Stores Dataset and Transform declarations
-Imported into trainer and tester
+### definitions
