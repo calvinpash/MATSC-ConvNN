@@ -14,7 +14,10 @@ def main(args):
     e = 12
     o = False
     hot = False
-    target = "./loops_counter_net.pth"
+    target = "./net.pth"
+    test_data="data/test_dat.csv"
+    test_dir='data/test_inputs'
+
     for arg in args:#Takes in command line arguments; less sugar but more rigorous
         try: arg = int(arg)
         except: pass
@@ -47,9 +50,19 @@ def main(args):
     net.load_state_dict(torch.load(target))
     #print("Network Loaded\n")
 
+    if o:
+        all_predictions, all_loops, all_scores = test(net, test_data, test_dir, o, b, nw)
+        open(f"./%s_guesses.csv" % target, 'w')
+        guess_output = pd.DataFrame(all_loops, columns = ["loops"]).assign(guess = all_predictions)
+        scores_output = pd.DataFrame(all_scores, columns = [f"s%d" % i for i in range(e)])
+        guess_output.join(scores_output).to_csv(f"./%s_guesses.csv" % target[:-4], index = False)
+    else:
+        test(net, test_data, test_dir, b = b, nw = nw)
+
+def test(net, test_data = "data/test_dat.csv", test_dir = 'data/test_inputs', o = False, b = 32, nw = 4):
     #print("Loading Dataset")
-    loops_dataset = LoopsDataset(csv_file='data/test_dat.csv', root_dir='data/test_images/', transform = transforms.Compose([ToTensor()]))
-    testloader = DataLoader(loops_dataset, batch_size=b, shuffle=False, num_workers=nw)
+    test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
+    testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
     #print("Dataset Loaded\n")
 
     #print("Testing Network")
@@ -59,8 +72,8 @@ def main(args):
 
     with torch.no_grad():
         for data in testloader:
-            images, loops, text = data['image'], data['loops'], data['text']
-            outputs = net(images)
+            inputs, loops, text = data['inputs'], data['labels'], data['text']
+            outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
 
             scores = np.array(predicted)
@@ -78,15 +91,15 @@ def main(args):
                 all_loops += list(loops)
                 all_scores += list(scores)
 
-    print('Accuracy of the network on the %d test images: %.2f%%' % (len(pd.read_csv("./data/test_dat.csv")), 100 * correct / total))
+    print('Accuracy of the network on the %d test inputs: %.2f%%' % (len(pd.read_csv(test_data)), 100 * correct / total))
     print(f"Average guess: %.2f" % (np.array(all_predictions).mean()))
     print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
 
     if o:
-        open(f"./%s_guesses.csv" % target, 'w')
-        guess_output = pd.DataFrame(all_loops, columns = ["loops"]).assign(guess = all_predictions)
-        scores_output = pd.DataFrame(all_scores, columns = [f"s%d" % i for i in range(e)])
-        guess_output.join(scores_output).to_csv(f"./%s_guesses.csv" % target[:-4], index = False)
+        return (all_predictions, all_loops, all_scores)
+    else:
+        return all_predictions
+
 
 if __name__ == '__main__':
     main(argv[1:])

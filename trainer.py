@@ -14,7 +14,7 @@ import os
 
 def make_folder(addy):
     #Make file structure if missing
-    print("Makefolder")
+    #print("Makefolder")
     split_addy = addy.split("/")
     for i in range(len(split_addy)-int("." in split_addy[-1])):
         if not os.path.exists("/".join(split_addy[:i+1])):
@@ -30,13 +30,15 @@ def main(args):
     o = False
     o_append = False
     hot = False
-    start_target = "./loops_counter_net.pth"
-    target = "./loops_counter_net.pth"
+    start_target = "./net.pth"
+    target = "./net.pth"
     data_file='data/dat.csv'
-    data_dir='data/images/'
+    data_dir='data/inputs/'
+    test_data="data/test_dat.csv"
+    test_dir='data/test_inputs'
     model_num = -1
     incr_size = 25
-    incr_target = "./incr_model"
+    incr_target = "./models/incr_model"
     lr = 0.01
     for arg in args:#Takes in command line arguments; less sugar but more rigorous
         try: arg = int(arg)
@@ -119,7 +121,7 @@ def main(args):
     dataloader = DataLoader(loops_dataset, batch_size = b, num_workers = nw)
 
     if len(loops_dataset) != len(os.listdir(data_dir)):
-        print(f"Found %d entries and %d images. Killing script" % (len(loops_dataset), len(os.listdir(data_dir))))
+        print(f"Found %d entries and %d samples. Killing script" % (len(loops_dataset), len(os.listdir(data_dir))))
         exit()
     if model_num >= 0 and incr_size > e:
         print("Incremental save size greater than epoch.")
@@ -152,7 +154,7 @@ def main(args):
     compact_print = (len(loops_dataset)/b > 10)
     if compact_print:
         print("Printing compactly. %d Batches per Epoch" % np.floor(len(loops_dataset)/b))
-        test_dataset = LoopsDataset(csv_file='data/test_dat.csv', root_dir='data/test_images/', transform = transforms.Compose([ToTensor()]))
+        test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
         testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
         test_acc = []
 
@@ -167,7 +169,7 @@ def main(args):
             print("\tBatch\tLoss\tAccuracy\t")
 
         for i, data in enumerate(dataloader, 0):
-            inputs, loops, text = data['image'].to(device), data['loops'].to(device), data['text']
+            inputs, loops, text = data['inputs'].to(device), data['labels'].to(device), data['text']
             # print(type(inputs), type(loops), type(text))
             optimizer.zero_grad()
             outputs = net(inputs)
@@ -198,8 +200,8 @@ def main(args):
             total = 0
             with torch.no_grad():
                 for data in testloader:
-                    images, loops = data['image'].to(device), data['loops']
-                    outputs = net(images)
+                    inputs, loops = data['inputs'].to(device), data['labels']
+                    outputs = net(inputs)
                     predicted = outputs.data
 
                     predicted = np.array([max([(v,i) for i,v in enumerate(predicted[j])])[1] for j in range(len(predicted))])

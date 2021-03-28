@@ -112,7 +112,7 @@ class LoopsDataset(Dataset):
             loops[self.loops_frame.iloc[idx, 2]] = 1
         else: #If using label index (CrossEntropy, . . .
             loops = self.loops_frame.iloc[idx, 2]
-        sample = {'image': image, 'loops': loops, 'text': text}
+        sample = {'inputs': image, 'labels': loops, 'text': text}
 
         if self.transform:
             sample = self.transform(sample)
@@ -121,7 +121,7 @@ class LoopsDataset(Dataset):
 
 class ToTensor(object):
     def __call__(self, sample):
-        image, loops, text = sample['image'], sample['loops'], sample['text']
+        image, loops, text = sample['inputs'], sample['labels'], sample['text']
 
         hot = (type(loops) == np.ndarray)
         if image.shape[2] == 4:#if the image has a color channel
@@ -133,10 +133,10 @@ class ToTensor(object):
 
         image = image.transpose((2, 0, 1))
         if hot:
-            return {'image': torch.from_numpy(image).float(),
-                    'loops': torch.from_numpy(loops).float(),
+            return {'inputs': torch.from_numpy(image).float(),
+                    'labels': torch.from_numpy(loops).float(),
                     'text': text}
         else:
-            return {'image': torch.from_numpy(image).float(),
-                    'loops': loops,
+            return {'inputs': torch.from_numpy(image).float(),
+                    'labels': loops,
                     'text': text}
