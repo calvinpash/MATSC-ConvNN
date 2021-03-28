@@ -5,7 +5,6 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from definitions import Net, LoopsDataset, ToTensor
 from torchvision import transforms, utils
-from pandas import DataFrame, concat, read_csv
 import numpy as np
 from sys import argv, exit
 from PIL import Image
@@ -142,31 +141,35 @@ def main(args):
         loss_output = []#epoch, batch, loss
         if not os.path.exists(loss_file):
             o_append = False
-            open(loss_file,'x')
+            out_file = open(loss_file,'w+')
+            out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
+
         elif not o_append:
             print("These settings will overwrite an existing loss output file.")
             overwrite = input("Are you sure? (Y/N): ")
+
             if not overwrite in "yY":
                 o_append = True
+                out_file = open(loss_file, 'a')
                 print("Good choice, buddy\n")
+            else:
+                out_file = open(loss_file, 'w')
+                out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
+
         print(f"Outputting loss to: %s\n" % loss_file)
 
-    compact_print = (len(loops_dataset)/b > 10)
-    if compact_print:
-        print("Printing compactly. %d Batches per Epoch" % np.floor(len(loops_dataset)/b))
+    print("%d Batches per Epoch" % np.floor(len(loops_dataset)/b))
+    if model_num >= 0:
         test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
         testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
-        test_acc = []
+    test_acc = []
 
 
     for epoch in range(e):  # loop over the dataset multiple times
         print(f"Current Epoch: %d" % epoch)
         running_loss = 0.0
-        if compact_print:
-            losses = []
-            acces = []
-        else:
-            print("\tBatch\tLoss\tAccuracy\t")
+        losses = []
+        acces = []
 
         for i, data in enumerate(dataloader, 0):
             inputs, loops, text = data['inputs'].to(device), data['labels'].to(device), data['text']
@@ -179,13 +182,9 @@ def main(args):
             correct = int(pred.eq(loops).sum().item())
             acc = correct / int(loops.size()[0])
 
-            if compact_print:
-                losses.append(loss.sum().item())
-                acces.append(acc)
-            else:
-                print(f"\t%d\t%.4f\t%.3f" % (i, loss.sum().item(), acc))
-                if o:
-                    loss_output.append([epoch, i, loss.sum().item()])
+            losses.append(loss.sum().item())
+            acces.append(acc)
+
             loss.backward()
             optimizer.step()
 
@@ -214,31 +213,20 @@ def main(args):
             print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
             print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
             test_acc.append(correct/total)
-
-
-        if compact_print:
-            print("\tMean\tSD")
-            lm, lsd = (np.array(losses).mean(), np.array(losses).var()**.5)
-            am, asd = (np.array(acces).mean(), np.array(acces).var()**.5)
-            print(f"Loss\t%.4f\t%.4f" % (lm, lsd))
-            print(f"Acc\t%.4f\t%.4f" % (am, asd))
-            if o:
-                loss_output.append([epoch, lm, am, lsd, asd])
-        print('Finished Training')
-
-    if o:
-        if o_append:
-            df = read_csv(loss_file)
-        elif compact_print:
-            df = DataFrame(columns = ["epoch","loss","acc","loss_sd","acc_sd", "test_acc", "train_number"])
-            loss_output = [loss_output[i] + [test_acc[i//incr_size]] for i in range(len(loss_output))]
         else:
-            df = DataFrame(columns = ["epoch","batch","loss", "train_number"])
+            test_acc.append(0)
 
-        df_output = DataFrame(loss_output, columns = (["epoch","loss","acc","loss_sd","acc_sd", "test_acc"] if compact_print else ["epoch","batch","loss"]))
-        df_output = df_output.assign(train_number = np.full(len(loss_output), len(df.train_number.unique())))
-        df = concat([df, df_output])
-        df.to_csv(loss_file, index = False)
+
+        print("\tMean\tSD")
+        lm, lsd = (np.array(losses).mean(), np.array(losses).var()**.5)
+        am, asd = (np.array(acces).mean(), np.array(acces).var()**.5)
+        print(f"Loss\t%.4f\t%.4f" % (lm, lsd))
+        print(f"Acc\t%.4f\t%.4f" % (am, asd))
+        if o:
+            out = [str(i) for i in [epoch, lm, am, test_acc[-1], lsd, asd]]
+            out_file.write(",".join(out) + "\n")
+
+        print('Finished Training')
 
     torch.save(net.state_dict(), target)
 
