@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from definitions import Net, LoopsDataset, ToTensor
 from tester import test
+from grapher import graph
 from torchvision import transforms, utils
 import numpy as np
 from sys import argv, exit
@@ -220,11 +221,14 @@ def main(args):
         print('Finished Training')
 
     torch.save(net.state_dict(), "output/%s/net.pth" % target)
-
     in_def = open("definitions.py").read()
     out_def = open("output/%s/definitions.py" % target,'w+')
     out_def.write(in_def)
     out_def.close()
+
+    if o:
+        out_file.close()
+        graph(loss_file)
 
 if __name__ == '__main__':
     main(argv[1:])

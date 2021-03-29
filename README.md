@@ -3,7 +3,7 @@ Generalization of the CountLoops project. Our goal is to create a ConvNN that us
 
 ### trainer
 
-Train neural network 
+Train neural network
 
 Args:
 *    epoch = 100:        [0-9]+
@@ -25,6 +25,12 @@ Args:
 *    output = False:     o | [^o]
 *    net size = 12:      [0-9]+
 *    model = "./loops_counter_net.pth": \./.+\.pth
+
+### grapher
+Generates a graph for a given csv file
+
+Args:
+*    csv = "./loss.csv": \./.*\.csv
 
 ### data/download
 Download images to image folder using data in csv file
