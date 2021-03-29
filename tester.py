@@ -67,7 +67,7 @@ def main(args):
     print(f"Average guess: %.2f" % (np.array(all_predictions).mean()))
     print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
 
-def test(net, test_dataset, test_loader, o = False):
+def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
     #print("Dataset Loaded\n")
 
     #print("Testing Network")
@@ -77,11 +77,11 @@ def test(net, test_dataset, test_loader, o = False):
 
     with torch.no_grad():
         for data in test_loader:
-            inputs, loops, text = data['inputs'], data['labels'], data['text']
+            inputs, loops, text = data['inputs'].to(device), data['labels'], data['text']
             outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
 
-            scores = np.array(predicted)
+            scores = np.array([i for i in predicted])
             predicted = np.array([max([(v,i) for i,v in enumerate(predicted[j])])[1] for j in range(len(predicted))])
 
             total += loops.size(0)
