@@ -197,11 +197,13 @@ def main(args):
         if model_num >= 0 and epoch % incr_size == 0:
             torch.save(net.state_dict(), f"./output/%s/models/%d.pth" % (target, model_num))
             model_num += 1
-            correct, total, all_predictions = test(net, test_dataset, test_loader)
+            correct, total, all_predictions = test(net, test_dataset, test_loader, device = device)
             print('Accuracy on test: %.2f%%' % (100 * correct / total))
             print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
             print(f"SD of guesses: %.2f\n" % (np.array(all_predictions).var()**.5))
             test_acc.append(correct/total)
+        elif model_num >= 0:
+            test_acc.append(test_acc[-1])
         else:
             test_acc.append(0)
 
