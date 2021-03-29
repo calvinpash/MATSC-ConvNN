@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 from definitions import Net, LoopsDataset, ToTensor
+from tester import test
 from torchvision import transforms, utils
 import numpy as np
 from sys import argv, exit
@@ -30,14 +31,13 @@ def main(args):
     o_append = False
     hot = False
     start_target = "./net.pth"
-    target = "./net.pth"
+    target = ""
     data_file='data/dat.csv'
     data_dir='data/inputs/'
     test_data="data/test_dat.csv"
     test_dir='data/test_inputs'
     model_num = -1
     incr_size = 25
-    incr_target = "./models/incr_model"
     lr = 0.01
     for arg in args:#Takes in command line arguments; less sugar but more rigorous
         try: arg = int(arg)
@@ -47,7 +47,7 @@ def main(args):
         elif arg[0] == "+":
             append = True
             if "." in arg:
-                start_target = arg[arg.index("."):]
+                start_target = arg[arg.index(".")+2:]
         elif arg[0] == "o":
             o = True
             if len(arg) > 1 and arg[1] == "+":
@@ -61,7 +61,7 @@ def main(args):
             try: nw = int(arg[2:])
             except: pass
         elif arg[0] == ".":
-            target = arg
+            target = arg[1:]
         elif arg[0] == "i":
             model_num = 0
             if len(arg) > 1:
@@ -69,8 +69,7 @@ def main(args):
                     try: incr_size = int(arg[1:1+i])
                     except: continue
             if "." in arg:
-                incr_target = arg[arg.index("."):]
-                make_folder(incr_target)
+                target = arg[arg.index(".")+2:]
         elif len(arg) > 1 and arg[:2] == "lr":
              try: lr = float(arg[3:])
              except: pass
@@ -80,19 +79,28 @@ def main(args):
     if append and not os.path.exists(start_target):
         append = False
         print("Couldn't find target starting model")
+
+    if not os.path.exists(target):
+        make_folder(f"./output/%s" % target)
+
     if append and model_num >= 0:
-        model_num = len(os.listdir(incr_target))
+        model_num = len(os.listdir(target))
+
+
 
     print(f"Epoch Count: %d" % e)
     print(f"Batch Size: %d" % b)
     print(f"Output Loss: %r" % o)
-    print(f"Output model file: %s" % target)
+    print(f"Output model file: output/%s/net.pth" % target)
     if append:
         print(f"Starting with model: %r" % start_target)
     if model_num >= 0:
+        make_folder(f"./output/%s/models" % target)
         print(f"\nIncremental Model saving ON")
-        print(f"Saving to: %s" % incr_target)
+        print(f"Saving to: ./output/%s/models" % target)
         print(f"Every %d epochs\n" % incr_size)
+        test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
+        test_loader = DataLoader(test_dataset, batch_size=1000, shuffle=False, num_workers=nw)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -132,9 +140,7 @@ def main(args):
 
     if o:
         settings = f"e%db%dnw%d" % (e, b, nw)
-        loss_file = f"./loss/%s/%s/%s.csv" % (str(criterion)[:-6],
-                                                settings,
-                                                (target[target.rindex("/")+1:target.rindex(".")] if model_num < 0 else incr_target[incr_target.rindex("/")+1:]))
+        loss_file = f"./output/%s/loss.csv" % (target)
 
         make_folder(loss_file)
 
@@ -159,11 +165,7 @@ def main(args):
         print(f"Outputting loss to: %s\n" % loss_file)
 
     print("%d Batches per Epoch" % np.floor(len(loops_dataset)/b))
-    if model_num >= 0:
-        test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
-        testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
     test_acc = []
-
 
     for epoch in range(e):  # loop over the dataset multiple times
         print(f"Current Epoch: %d" % epoch)
@@ -191,24 +193,9 @@ def main(args):
             running_loss += loss.item()
 
         if model_num >= 0 and epoch % incr_size == 0:
-            torch.save(net.state_dict(), f"%s/%d.pth" % (incr_target, model_num))
+            torch.save(net.state_dict(), f"./output/%s/models/%d.pth" % (target, model_num))
             model_num += 1
-            all_predictions = []
-
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for data in testloader:
-                    inputs, loops = data['inputs'].to(device), data['labels']
-                    outputs = net(inputs)
-                    predicted = outputs.data
-
-                    predicted = np.array([max([(v,i) for i,v in enumerate(predicted[j])])[1] for j in range(len(predicted))])
-
-                    total += loops.size(0)
-                    loops = np.array(loops)
-                    correct += (predicted == loops).sum()
-                    all_predictions += list(predicted)
+            correct, total, all_predictions = test(net, test_dataset, test_loader)
             print('Accuracy on test: %.2f%%' % (100 * correct / total))
             print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
             print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
@@ -228,7 +215,7 @@ def main(args):
 
         print('Finished Training')
 
-    torch.save(net.state_dict(), target)
+    torch.save(net.state_dict(), "output/%s/net.pth" % target)
 
 if __name__ == '__main__':
     main(argv[1:])

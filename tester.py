@@ -50,19 +50,24 @@ def main(args):
     net.load_state_dict(torch.load(target))
     #print("Network Loaded\n")
 
+    #print("Loading Dataset")
+    test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
+    testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
     if o:
-        all_predictions, all_loops, all_scores = test(net, test_data, test_dir, o, b, nw)
+        correct, total, all_predictions, all_loops, all_scores = test(net, test_dataset, test_loader, o, b, nw)
         open(f"./%s_guesses.csv" % target, 'w')
         guess_output = pd.DataFrame(all_loops, columns = ["loops"]).assign(guess = all_predictions)
         scores_output = pd.DataFrame(all_scores, columns = [f"s%d" % i for i in range(e)])
         guess_output.join(scores_output).to_csv(f"./%s_guesses.csv" % target[:-4], index = False)
     else:
-        test(net, test_data, test_dir, b = b, nw = nw)
+        correct, total, all_predictions = test(net, test_dataset, test_loader, b = b, nw = nw)
 
-def test(net, test_data = "data/test_dat.csv", test_dir = 'data/test_inputs', o = False, b = 32, nw = 4):
-    #print("Loading Dataset")
-    test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
-    testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
+
+    print('Accuracy of the network on the %d test inputs: %.2f%%' % (len(pd.read_csv(test_data)), 100 * correct / total))
+    print(f"Average guess: %.2f" % (np.array(all_predictions).mean()))
+    print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
+
+def test(net, test_dataset, test_loader, o = False):
     #print("Dataset Loaded\n")
 
     #print("Testing Network")
@@ -71,7 +76,7 @@ def test(net, test_data = "data/test_dat.csv", test_dir = 'data/test_inputs', o 
     all_predictions, all_loops, all_scores = [],[],[]
 
     with torch.no_grad():
-        for data in testloader:
+        for data in test_loader:
             inputs, loops, text = data['inputs'], data['labels'], data['text']
             outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
@@ -91,14 +96,10 @@ def test(net, test_data = "data/test_dat.csv", test_dir = 'data/test_inputs', o 
                 all_loops += list(loops)
                 all_scores += list(scores)
 
-    print('Accuracy of the network on the %d test inputs: %.2f%%' % (len(pd.read_csv(test_data)), 100 * correct / total))
-    print(f"Average guess: %.2f" % (np.array(all_predictions).mean()))
-    print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
-
     if o:
-        return (all_predictions, all_loops, all_scores)
+        return (correct, total, all_predictions, all_loops, all_scores)
     else:
-        return all_predictions
+        return (correct, total, all_predictions)
 
 
 if __name__ == '__main__':
