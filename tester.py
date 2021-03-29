@@ -81,7 +81,10 @@ def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
             outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
 
-            scores = np.array([i for i in predicted])
+            if device == 'cuda':
+                scores = np.array([i for i in predicted])
+            else:
+                scores = np.array(predicted)
             predicted = np.array([max([(v,i) for i,v in enumerate(predicted[j])])[1] for j in range(len(predicted))])
 
             total += loops.size(0)
