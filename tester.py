@@ -81,7 +81,7 @@ def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
             outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
 
-            if 'cuda' in  device:
+            if 'cuda' in str(device):
                 scores = np.array([i for i in predicted])
             else:
                 scores = np.array(predicted)
