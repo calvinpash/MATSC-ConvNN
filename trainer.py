@@ -80,6 +80,8 @@ def main(args):
         append = False
         print("Couldn't find target starting model")
 
+    if target[-1] == "/":
+        target = target[:-1]
     if not os.path.exists(target):
         make_folder(f"./output/%s" % target)
 
@@ -198,7 +200,7 @@ def main(args):
             correct, total, all_predictions = test(net, test_dataset, test_loader)
             print('Accuracy on test: %.2f%%' % (100 * correct / total))
             print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
-            print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
+            print(f"SD of guesses: %.2f\n" % (np.array(all_predictions).var()**.5))
             test_acc.append(correct/total)
         else:
             test_acc.append(0)
@@ -216,6 +218,11 @@ def main(args):
         print('Finished Training')
 
     torch.save(net.state_dict(), "output/%s/net.pth" % target)
+
+    in_def = open("definitions.py").read()
+    out_def = open("output/%s/definitions.py" % target,'w+')
+    out_def.write(in_def)
+    out_def.close()
 
 if __name__ == '__main__':
     main(argv[1:])
