@@ -66,7 +66,7 @@ ori1_mat=np.reshape(oris_1,data['X'].shape)
 ori2_mat=np.reshape(oris_2,data['X'].shape)   
 stress_mat=np.reshape(stresses,data['X'].shape)    #dimensions are currently x y z
 
-np.savez(f"./data/output/dat_{num}.npz", ori0_mat, ori1_mat, ori2_mat, stress_mat)
+np.savez(f"./data/interim/dat_{num}.npz", ori0_mat, ori1_mat, ori2_mat, stress_mat)
 
 
 
