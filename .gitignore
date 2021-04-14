@@ -1,8 +1,6 @@
 #Data files
-data/inputs
+data/data
 data/dat.csv
-data/test_inputs
-data/test_dat.csv
 
 #all outputs
 output
