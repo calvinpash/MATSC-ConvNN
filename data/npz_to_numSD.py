@@ -14,21 +14,23 @@ def main(args):
     from os import listdir
     sd = 2
     for arg in args:#Takes in command line arguments; less sugar but more rigorous
-        try: arg = double(arg)
+        try: arg = float(arg)
         except: pass
-        if type(arg) == double:
+        if type(arg) == float:
             sd = arg
         else:
             print(f"Argument '%s' ignored" % str(arg))
 
     all_dat = np.array([np.array(list(np.load(f"data/interim/{i}").values())) for i in os.listdir("data/interim")])
-    all_dat = np.moveaxis(all_dat[:,3,:,:,:],3,1)#allows us to iterate by z-layer
+    #trim off edges with -1 values
+    #Move axes so we can iterate by z-layer
+    all_dat = np.moveaxis(all_dat[:,3,1:-1,1:-1,:],3,1)
 
     stress_mean = np.mean(all_dat)
     stress_sd = np.std(all_dat)
     #stress_by_layers = all_dat[:,3,:,:,:].reshape()
 
-    shape_by_layer = (all_dat.shape[2]*all_dat.shape[0],all_dat.shape[3], all_dat.shape[4])
+    shape_by_layer = (all_dat.shape[0]*all_dat.shape[1],all_dat.shape[2], all_dat.shape[3])
     stress_by_layer = all_dat.reshape(shape_by_layer)
 
     stress_num_hotspot = np.array([np.sum(np.logical_or(layer < stress_mean - sd*stress_sd, stress_mean + sd*stress_sd < layer)) for layer in stress_by_layer])
