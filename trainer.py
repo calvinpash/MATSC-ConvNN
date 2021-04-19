@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-from definitions import Net, LoopsDataset, ToTensor
+from definitions import Net, StressDataset, ToTensor
 from tester import test
 from grapher import graph
 from torchvision import transforms, utils
@@ -32,11 +32,8 @@ def main(args):
     o_append = False
     hot = False
     start_target = "./net.pth"
-    target = ""
-    data_file='data/dat.csv'
-    data_dir='data/inputs/'
-    test_data="data/test_dat.csv"
-    test_dir='data/test_inputs'
+    target = "/"
+    data_file='data/data/processed/processed.npz'
     model_num = -1
     incr_size = 25
     lr = 0.01
@@ -102,37 +99,32 @@ def main(args):
         print(f"\nIncremental Model saving ON")
         print(f"Saving to: ./output/%s/models" % target)
         print(f"Every %d epochs\n" % incr_size)
-        test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
-        test_loader = DataLoader(test_dataset, batch_size=1000, shuffle=False, num_workers=nw)
+        test_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
+        test_loader = DataLoader(test_dataset, batch_size=500, shuffle=False, num_workers=nw)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    
     print(f"Using device: %s" % device)
     net = Net()
     if append:
         net.load_state_dict(torch.load(start_target))
-        if hot:
-            criterion = nn.MSELoss()
-        else:
-            criterion = nn.CrossEntropyLoss()
+        criterion = nn.MSELoss()
     else:
-        vals=np.ones(12)
+        vals=np.ones(2)
         vals=vals/np.linalg.norm(vals)
         weights=torch.FloatTensor(vals).to(device)
-        if hot:
-            criterion = nn.MSELoss(weight = weights)
-        else:
-            criterion = nn.CrossEntropyLoss(weight = weights)
+        criterion = nn.MSELoss()#weight = weights)
 
     net.to(device)
     print("Loading Data")
+    
     # device = torch.device('cuda' if torch.cuda)
-    loops_dataset = LoopsDataset(hot=hot, csv_file=data_file, root_dir=data_dir, transform = transforms.Compose([ToTensor()]))
-    dataloader = DataLoader(loops_dataset, batch_size = b, num_workers = nw)
+    stress_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
 
-    if len(loops_dataset) != len(os.listdir(data_dir)):
-        print(f"Found %d entries and %d samples. Killing script" % (len(loops_dataset), len(os.listdir(data_dir))))
-        exit()
+    b = len(stress_dataset) if b > len(stress_dataset) else b
+    
+    dataloader = DataLoader(stress_dataset, batch_size = b, num_workers = nw)
+    
     if model_num >= 0 and incr_size > e:
         print("Incremental save size greater than epoch.")
         exit()
@@ -167,7 +159,7 @@ def main(args):
 
         print(f"Outputting loss to: %s\n" % loss_file)
 
-    print("%d Batches per Epoch" % np.floor(len(loops_dataset)/b))
+    print("%d Batches per Epoch" % np.floor(len(stress_dataset)/b))
     test_acc = []
 
     for epoch in range(e):  # loop over the dataset multiple times
@@ -176,44 +168,63 @@ def main(args):
         losses = []
         acces = []
 
+        all_pred = []
+        
         for i, data in enumerate(dataloader, 0):
-            inputs, loops, text = data['inputs'].to(device), data['labels'].to(device), data['text']
-            # print(type(inputs), type(loops), type(text))
+            inputs, labels = data['inputs'].to(device), data['labels'].to(device)
+
+            #print(inputs.shape)
+            
             optimizer.zero_grad()
             outputs = net(inputs)
-            loss = criterion(outputs, loops)
 
-            _, pred = outputs.max(dim=1)
-            correct = int(pred.eq(loops).sum().item())
-            acc = correct / int(loops.size()[0])
+            labels = labels.to(torch.float32)
+            outputs = outputs.to(torch.float32)
+            
+            #print(labels)
+            
+            loss = criterion(outputs, labels)
+
+            pred = outputs
+
+            #print(pred)
+            
+            all_pred.append(np.array(pred.tolist()))
+            
+            correct = int(pred.eq(labels).sum().item())
+            acc = correct / int(labels.size()[0])
 
             losses.append(loss.sum().item())
             acces.append(acc)
 
             loss.backward()
             optimizer.step()
-
+            
             running_loss += loss.item()
-
+            
         if model_num >= 0 and epoch % incr_size == 0:
+            print(f"\nSaving model {model_num}\n")
             torch.save(net.state_dict(), f"./output/%s/models/%d.pth" % (target, model_num))
             model_num += 1
-            correct, total, all_predictions = test(net, test_dataset, test_loader, device = device)
-            print('Accuracy on test: %.2f%%' % (100 * correct / total))
-            print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
-            print(f"SD of guesses: %.2f\n" % (np.array(all_predictions).var()**.5))
-            test_acc.append(correct/total)
-        elif model_num >= 0:
-            test_acc.append(test_acc[-1])
-        else:
-            test_acc.append(0)
+            #correct, total, all_predictions = test(net, test_dataset, test_loader, device = device)
+            #print('Accuracy on test: %.2f%%' % (100 * correct / total))
+            #print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
+            #print(f"SD of guesses: %.2f\n" % (np.array(all_predictions).var()**.5))
+            #test_acc.append(correct/total)
+            
+        #elif model_num >= 0:
+            #test_acc.append(test_acc[-1])
+        #else:
+        test_acc.append(0)
 
-
+        all_pred = np.array(all_pred)
+            
         print("\tMean\tSD")
         lm, lsd = (np.array(losses).mean(), np.array(losses).var()**.5)
         am, asd = (np.array(acces).mean(), np.array(acces).var()**.5)
         print(f"Loss\t%.4f\t%.4f" % (lm, lsd))
         print(f"Acc\t%.4f\t%.4f" % (am, asd))
+        print(f"Pred\t%.4f\t%.4f" % (all_pred.mean(), all_pred.std()))
         if o:
             out = [str(i) for i in [epoch, lm, am, test_acc[-1], lsd, asd]]
             out_file.write(",".join(out) + "\n")

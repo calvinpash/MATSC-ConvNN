@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from definitions import Net, LoopsDataset, ToTensor
+from definitions import Net, StressDataset, ToTensor
 from sys import argv, exit
 import numpy as np
 import pandas as pd
@@ -51,7 +51,7 @@ def main(args):
     #print("Network Loaded\n")
 
     #print("Loading Dataset")
-    test_dataset = LoopsDataset(csv_file=test_data, root_dir=test_dir, transform = transforms.Compose([ToTensor()]))
+    test_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
     testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
     if o:
         correct, total, all_predictions, all_loops, all_scores = test(net, test_dataset, test_loader, o, b, nw)
@@ -77,7 +77,7 @@ def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
 
     with torch.no_grad():
         for data in test_loader:
-            inputs, loops, text = data['inputs'].to(device), data['labels'], data['text']
+            inputs, loops = data['inputs'].to(device), data['labels']
             outputs = net(inputs)
             predicted = outputs.data#add the _, if one-hot-encoded
 
