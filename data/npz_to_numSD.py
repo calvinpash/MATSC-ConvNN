@@ -45,18 +45,8 @@ def main(args):
     
     shape_by_layer = (all_dat.shape[0]*all_dat.shape[1], all_dat.shape[2], all_dat.shape[3], all_dat.shape[4])
     dat_by_layer = all_dat.reshape(shape_by_layer)
-        
-    stress_num_hotspot = np.array([np.sum(stress_mean + sd*stress_sd < layer) for layer in dat_by_layer[:,:,:,3]])
-
-    np.savez("data/processed/processed.npz", dat_by_layer[:,:,:,:3], stress_num_hotspot)
-
-    print(f"Sigma: {sd}")
-    print(f"\tMean\tSD")
-    print(f"\t%.2f\t%.2f" % (np.mean(stress_num_hotspot), np.std(stress_num_hotspot)))
-    print(np.sum(stress_num_hotspot<10))
-
     
-    
+    np.savez("data/processed/processed_field.npz", dat_by_layer[:,:,:,:3], dat_by_layer[:,:,:,3])  
 
 
 if __name__ == '__main__':

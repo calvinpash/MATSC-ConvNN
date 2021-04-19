@@ -34,26 +34,26 @@ class Net(nn.Module):
 
         size3 = size2+2*padding2-(filter2-1)
         size4=np.floor((size3 - pool_size)/pool_stride + 1).astype(int)
+        
+        padding3 = 1
+        filter3 = 3
+        output3 = 16
 
-        #padding3 = 1
-        #filter3 = 3
-        #output3 = 32
+        self.conv3 = nn.Conv2d(output2, output3, filter3, padding = padding3)
 
-        #self.conv3 = nn.Conv2d(output2, output3, filter3, padding = padding3)
+        size5 = size4+2*padding3-(filter3-1)
+        size6 = np.floor((size5 - pool_size)/pool_stride + 1).astype(int)
 
-        #size5 = size4+2*padding3-(filter3-1)
-        #size6 = np.floor((size5 - pool_size)/pool_stride + 1).astype(int)
+        padding4 = 1
+        filter4 = 3
+        output4 = 16
 
-        #filter4 = 3
-        #padding4 = 1
-        #output4 = 8
+        self.conv4 = nn.Conv2d(output3, output4, filter4, padding = padding4)
 
-        #self.conv4 = nn.Conv2d(output3, output4, filter4, padding = padding4)
+        size7 = size6+2*padding4-(filter4-1)
+        size8 = np.floor((size7 - pool_size)/pool_stride + 1).astype(int)
 
-        #size7 = size6+2*padding4-(filter4-1)
-        #size8 = np.floor((size7 - pool_size)/pool_stride + 1).astype(int)
-
-        self.fc1 = nn.Linear(output2 * size4 * size4, 20)
+        self.fc1 = nn.Linear(output4 * size8 * size8, )
         #self.fc2 = nn.Linear(120,20)
         self.fc_out = nn.Linear(20,1)
 
