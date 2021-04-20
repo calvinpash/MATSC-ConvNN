@@ -6,7 +6,6 @@ from torchvision import transforms
 from definitions import Net, StressDataset, ToTensor
 from sys import argv, exit
 import numpy as np
-import pandas as pd
 
 def main(args):
     b = 1000
@@ -15,9 +14,8 @@ def main(args):
     o = False
     hot = False
     target = "./net.pth"
-    test_data="data/test_dat.csv"
-    test_dir='data/test_inputs'
-
+    test_data="data/data/test/processed_field.npz"
+    
     for arg in args:#Takes in command line arguments; less sugar but more rigorous
         try: arg = int(arg)
         except: pass
@@ -45,64 +43,53 @@ def main(args):
         print("One-Hot encoding: True")
     print(f"Model file: %s\n" % target)
 
-    #print("Loading Network")
     net = Net(e)
     net.load_state_dict(torch.load(target))
-    #print("Network Loaded\n")
 
-    #print("Loading Dataset")
-    test_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
-    testloader = DataLoader(test_dataset, batch_size=b, shuffle=False, num_workers=nw)
-    if o:
-        correct, total, all_predictions, all_loops, all_scores = test(net, test_dataset, test_loader, o, b, nw)
-        open(f"./%s_guesses.csv" % target, 'w')
-        guess_output = pd.DataFrame(all_loops, columns = ["loops"]).assign(guess = all_predictions)
-        scores_output = pd.DataFrame(all_scores, columns = [f"s%d" % i for i in range(e)])
-        guess_output.join(scores_output).to_csv(f"./%s_guesses.csv" % target[:-4], index = False)
-    else:
-        correct, total, all_predictions = test(net, test_dataset, test_loader, b = b, nw = nw)
+    test_dataset = StressDataset(data_dir=test_data, transform = transforms.Compose([ToTensor()]))
+    testloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=nw)
 
-
-    print('Accuracy of the network on the %d test inputs: %.2f%%' % (len(pd.read_csv(test_data)), 100 * correct / total))
-    print(f"Average guess: %.2f" % (np.array(all_predictions).mean()))
-    print(f"SD of guesses: %.2f" % (np.array(all_predictions).var()**.5))
+    lm, lsd = test(net, test_dataset, testloader, o = False)
+    
+    print(f"Average loss: %.2f" % (lm))
+    print(f"SD of loss: %.2f" % (lsd))
 
 def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
-    #print("Dataset Loaded\n")
-
-    #print("Testing Network")
-    correct = 0
-    total = 0
-    all_predictions, all_loops, all_scores = [],[],[]
-
+    losses = []
+    all_inputs = []
+    all_labels = []
+    all_outputs = []
+    criterion = nn.MSELoss(reduction = 'sum')
+    
     with torch.no_grad():
         for data in test_loader:
-            inputs, loops = data['inputs'].to(device), data['labels']
+            inputs, labels = data['inputs'].to(device, dtype = torch.float32), data['labels'].to(device, dtype = torch.float32)
             outputs = net(inputs)
-            predicted = outputs.data#add the _, if one-hot-encoded
 
-            if 'cuda' in str(device):
-                scores = np.array([i for i in predicted])
-            else:
-                scores = np.array(predicted)
-            predicted = np.array([max([(v,i) for i,v in enumerate(predicted[j])])[1] for j in range(len(predicted))])
+            losses.append(criterion(np.squeeze(outputs), np.squeeze(labels)).item())
 
-            total += loops.size(0)
-
-            loops = np.array(loops)
-
-            correct += (predicted == loops).sum()
-
-
-            all_predictions += list(predicted)
             if o:
-                all_loops += list(loops)
-                all_scores += list(scores)
+                all_inputs.append(np.squeeze(inputs.cpu().detach().numpy()))
+                all_labels.append(np.squeeze(labels.cpu().detach().numpy()))
+                all_outputs.append(np.squeeze(outputs.cpu().detach().numpy()))
+
+    losses = np.array(losses)
+    lm, lsd = losses.mean(), losses.std()
 
     if o:
-        return (correct, total, all_predictions, all_loops, all_scores)
+        loss_percs = np.percentile(losses, [0,10,50,90,100])
+        print(f"0th % loss: {loss_percs[0]}")
+        print(f"10th % loss: {loss_percs[1]}")
+        print(f"50th % loss: {loss_percs[2]}")
+        print(f"90th % loss: {loss_percs[3]}")
+        print(f"100th % loss: {loss_percs[4]}")
+        print()
+
+        idx_percs = np.array([(np.abs(losses - perc)).argmin() for perc in loss_percs])
+
+        return (lm, lsd, np.array(all_inputs)[idx_percs], np.array(all_labels)[idx_percs], np.array(all_outputs)[idx_percs])
     else:
-        return (correct, total, all_predictions)
+        return (lm, lsd)
 
 
 if __name__ == '__main__':

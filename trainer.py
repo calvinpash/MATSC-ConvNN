@@ -34,7 +34,8 @@ def main(args):
     hot = False
     start_target = "./output/net.pth"
     target = "/"
-    data_file='data/data/test/processed_field.npz'
+    data_file='data/data/processed/processed_field.npz'
+    test_data_file = "data/data/test/processed_field.npz"
     model_num = -1
     incr_size = 25
     lr = 0.01
@@ -96,45 +97,38 @@ def main(args):
     print(f"Output model file: output/%s/net.pth" % target)
     if append:
         print(f"Starting with model: %r" % start_target)
+
+    stress_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
+    b = len(stress_dataset) if b > len(stress_dataset) else b
+    dataloader = DataLoader(stress_dataset, batch_size = b, num_workers = nw)
+
     if model_num >= 0:
         make_folder(f"./output/%s/models" % target)
         print(f"\nIncremental Model saving ON")
         print(f"Saving to: ./output/%s/models" % target)
         print(f"Every %d epochs\n" % incr_size)
         test_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
-        test_loader = DataLoader(test_dataset, batch_size=500, shuffle=False, num_workers=nw)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=nw)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     #device = "cpu"
-    
+
     print(f"Using device: %s" % device)
     net = Net()
     if append:
         net.load_state_dict(torch.load(start_target))
-        criterion = nn.MSELoss(reduction = 'sum')
-    else:
-        vals=np.ones(2)
-        vals=vals/np.linalg.norm(vals)
-        weights=torch.FloatTensor(vals).to(device)
-        criterion = nn.MSELoss(reduction = 'sum')#weight = weights)
+
+    criterion = nn.MSELoss(reduction = 'sum')#weight = weights)
 
     net.to(device)
     print("Loading Data")
-    
-    # device = torch.device('cuda' if torch.cuda)
-    stress_dataset = StressDataset(data_dir=data_file, transform = transforms.Compose([ToTensor()]))
 
-    b = len(stress_dataset) if b > len(stress_dataset) else b
-    
-    dataloader = DataLoader(stress_dataset, batch_size = b, num_workers = nw)
-    
     if model_num >= 0 and incr_size > e:
         print("Incremental save size greater than epoch.")
         exit()
 
-    #We use MSELoss here because our output is a vector of length 21
     optimizer = optim.SGD(net.parameters(), lr=lr)#,momentum = 0.9)
-    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.99**epoch)
+    #scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.99**epoch)
     print("Loaded\n")
 
     if o:
@@ -151,13 +145,7 @@ def main(args):
 
         elif not o_append:
             print("These settings will overwrite an existing loss output file.")
-            #overwrite = input("Are you sure? (Y/N): ")
 
-            #if not overwrite in "yY":
-                #o_append = True
-                #out_file = open(loss_file, 'a')
-                #print("Good choice, buddy\n")
-            #else:
             out_file = open(loss_file, 'w')
             out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
 
@@ -169,84 +157,75 @@ def main(args):
     loss_threshold = 0.0005
     min_loss = 2**32
     curr_lr = lr
-    
+
     for epoch in range(e):  # loop over the dataset multiple times
         print(f"Current Epoch: %d" % epoch)
         running_loss = 0.0
         losses = []
-        #acces = []
 
-        #all_pred = []
-        
         for i, data in enumerate(dataloader, 0):
             inputs, labels = data['inputs'].to(device, dtype = torch.float32), data['labels'].to(device, dtype = torch.float32)
 
             optimizer.zero_grad()
             outputs = net(inputs)
 
-            #labels = torch.tensor(labels.detach().numpy()[:,2:-2,2:-2])
-            #outputs = torch.tensor(outputs.detach().numpy()[:,2:-2,2:-2])
-            #if o:
-            #plt.imshow(labels.cpu().detach().numpy()[0]).write_png(f"data/data/test/labels{epoch}.png")
-            #plt.imshow(outputs.cpu().detach().numpy()[0]).write_png(f"data/data/test/{epoch}.png")    
-
             loss = criterion(outputs,labels)
 
-            #print(pred)
-            
-            #all_pred.append(np.array(pred.tolist()))
-            
-            #correct = int(pred.eq(labels).sum().item())
-            #acc = correct / int(labels.size()[0])
-
             losses.append(loss.sum().item()/b)
-            #acces.append(acc)
 
             loss.backward()
             optimizer.step()
-            
+
             running_loss += loss.item()
 
-                  
+
         if model_num >= 0 and epoch % incr_size == 0:
             print(f"\nSaving model {model_num}\n")
             torch.save(net.state_dict(), f"./output/%s/models/%d.pth" % (target, model_num))
-            plt.imshow(outputs.cpu().detach().numpy()[0]).write_png(f"output/{target}/preds/e{epoch}.png")
-            model_num += 1
-            #correct, total, all_predictions = test(net, test_dataset, test_loader, device = device)
-            #print('Accuracy on test: %.2f%%' % (100 * correct / total))
-            #print(f"Avg guess: %.2f" % (np.array(all_predictions).mean()))
-            #print(f"SD of guesses: %.2f\n" % (np.array(all_predictions).var()**.5))
-            #test_acc.append(correct/total)
-            
-        #elif model_num >= 0:
-            #test_acc.append(test_acc[-1])
-        #else:
-        test_acc.append(0)
 
-        #all_pred = np.array(all_pred)
-            
+            if o:
+                test_lm, test_sd, all_inputs, all_labels, all_outputs = test(net, test_dataset, test_loader, device = device, o = o)
+                make_folder(f"./output/{target}/preds/e{epoch}")
+                for i in range(len(all_labels)):
+                    plt.imshow(all_labels[i]).write_png(f"./output/{target}/preds/e{epoch}/stress{model_num}_{i}.png")
+                    plt.imshow(all_outputs[i]).write_png(f"./output/{target}/preds/e{epoch}/pred{model_num}_{i}.png")
+                    plt.imshow(np.moveaxis(all_inputs[i],0,2)+.5).write_png(f"./output/{target}/preds/e{epoch}/ori{model_num}_{i}.png")
+                
+            else:
+                test_lm, test_sd = test(net, test_dataset, test_loader, device = device, o = o)
+            print(f"Test loss Mean: {test_lm}")
+            print(f"Test loss SD  : {test_sd}")
+            print()
+
+            model_num += 1
+
+            test_acc.append(test_lm)
+        elif model_num >= 0:
+            test_acc.append(test_acc[-1])
+        else:
+            test_acc.append(0)
+
+
         print("\tMean\tSD")
         lm, lsd = (np.array(losses).mean(), np.array(losses).var()**.5)
         am, asd = (0,0)
         print(f"Loss\t%.4f\t%.4f" % (lm, lsd))
-        #print(f"Acc\t%.4f\t%.4f" % (am, asd))
-        #print(f"Pred\t%.4f\t%.4f" % (all_pred.mean(), all_pred.std()))
+
         if o:
             out = [str(i) for i in [epoch, lm, am, test_acc[-1], lsd, asd]]
             out_file.write(",".join(out) + "\n")
 
         if lm < min_loss and lm > min_loss*(1-loss_threshold):
             min_loss = lm
-            print(f"Curr_lr: {curr_lr}") 
-            
+            print(f"Curr_lr: {curr_lr}")
+
             #if epoch < 200: curr_lr *= 1.5
             curr_lr *= .95
 
             print(f"Updated to {curr_lr}")
-            
+
             optimizer = optim.SGD(net.parameters(), lr = curr_lr)
-            
+
     print('Finished Training')
 
     torch.save(net.state_dict(), "output/%s/net.pth" % target)
