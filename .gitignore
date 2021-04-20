@@ -1,6 +1,7 @@
 #Data files
 data/data
 data/dat.csv
+*.png
 
 #all outputs
 output
