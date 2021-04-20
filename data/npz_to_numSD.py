@@ -22,7 +22,8 @@ def main(args):
         else:
             print(f"Argument '%s' ignored" % str(arg))
 
-    all_dat = np.array([np.array(list(np.load(f"data/interim/{i}").values())) for i in os.listdir("data/interim")])
+    dat_dir = "data/interim"
+    all_dat = np.array([np.array(list(np.load(f"{dat_dir}/{i}").values())) for i in os.listdir(dat_dir) if i.endswith("npz")])
     
     all_dat = all_dat[:,:, 1:-1, 1:-1, :]
     
@@ -45,8 +46,13 @@ def main(args):
     
     shape_by_layer = (all_dat.shape[0]*all_dat.shape[1], all_dat.shape[2], all_dat.shape[3], all_dat.shape[4])
     dat_by_layer = all_dat.reshape(shape_by_layer)
+
+    #Fit stress values between 0 and 1
+    stress_norm = np.array([(layer-layer.min())/(layer.max()-layer.min()) for layer in dat_by_layer[:,:,:,3]])
+
+    #plt.imshow(stress_norm[24]).write_png("norm_stress.png")
     
-    np.savez("data/processed/processed_field.npz", dat_by_layer[:,:,:,:3], dat_by_layer[:,:,:,3])  
+    np.savez("data/processed/processed_field.npz", dat_by_layer[:,:,:,:3], stress_norm)  
 
 
 if __name__ == '__main__':

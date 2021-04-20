@@ -22,7 +22,7 @@ data=np.load('data/grid.npz')
 
 sim_val=1
 
-
+#els_file=f"data/test/result_{num}.stpoint"
 els_file=f"data/meshes/result_{num}.stpoint"
 oris_file=f'/tri-s-1/s2/dcp5303/projects/2021_03_16_GNN_Paper/test_{num}.sim/results/elements/ori/ori.step0'
 stress_file=f'/tri-s-1/s2/dcp5303/projects/2021_03_16_GNN_Paper/test_{num}.sim/results/elements/stress/stress.step1'
@@ -35,7 +35,7 @@ els=np.loadtxt(els_file)
 ori_raw=np.loadtxt(oris_file)
 stress_raw=np.loadtxt(stress_file)
 
-print(f"Running on {num}")
+print(f"Running on {num}\n")
 print(f"\t{els.shape}")
 print(f"\t{ori_raw.shape}")
 print(f"\t{stress_raw.shape}")
@@ -66,9 +66,8 @@ ori1_mat=np.reshape(oris_1,data['X'].shape)
 ori2_mat=np.reshape(oris_2,data['X'].shape)   
 stress_mat=np.reshape(stresses,data['X'].shape)    #dimensions are currently x y z
 
-np.savez(f"./data/interim/dat_{num}.npz", ori0_mat, ori1_mat, ori2_mat, stress_mat)
-
-
+#np.savez(f"./data/test/dat_{num}.npz", ori0_mat, ori1_mat, ori2_mat, stress_mat)
+np.savez(f"./data/extraneous/dat_{num}.npz", stress_mat)#ori0_mat, ori1_mat, ori2_mat, stress_mat)
 
 #%%
 
