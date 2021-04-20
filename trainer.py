@@ -9,8 +9,9 @@ from grapher import graph
 from torchvision import transforms, utils
 import numpy as np
 from sys import argv, exit
-from PIL import Image
+import matplotlib.pyplot as plt
 import os
+from math import isnan
 #Create Dataset
 
 def make_folder(addy):
@@ -31,9 +32,9 @@ def main(args):
     o = False
     o_append = False
     hot = False
-    start_target = "./net.pth"
+    start_target = "./output/net.pth"
     target = "/"
-    data_file='data/data/processed/processed.npz'
+    data_file='data/data/test/processed_field.npz'
     model_num = -1
     incr_size = 25
     lr = 0.01
@@ -82,9 +83,10 @@ def main(args):
         target = target[:-1]
     if not os.path.exists(target):
         make_folder(f"./output/%s" % target)
+        make_folder(f"./output/{target}/preds")
 
     if append and model_num >= 0:
-        model_num = len(os.listdir(target))
+        model_num = len(os.listdir(f"./output/{target}"))
 
 
 
@@ -103,17 +105,18 @@ def main(args):
         test_loader = DataLoader(test_dataset, batch_size=500, shuffle=False, num_workers=nw)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    #device = "cpu"
     
     print(f"Using device: %s" % device)
     net = Net()
     if append:
         net.load_state_dict(torch.load(start_target))
-        criterion = nn.MSELoss()
+        criterion = nn.MSELoss(reduction = 'sum')
     else:
         vals=np.ones(2)
         vals=vals/np.linalg.norm(vals)
         weights=torch.FloatTensor(vals).to(device)
-        criterion = nn.MSELoss()#weight = weights)
+        criterion = nn.MSELoss(reduction = 'sum')#weight = weights)
 
     net.to(device)
     print("Loading Data")
@@ -131,6 +134,7 @@ def main(args):
 
     #We use MSELoss here because our output is a vector of length 21
     optimizer = optim.SGD(net.parameters(), lr=lr)#,momentum = 0.9)
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lambda epoch: 0.99**epoch)
     print("Loaded\n")
 
     if o:
@@ -147,64 +151,67 @@ def main(args):
 
         elif not o_append:
             print("These settings will overwrite an existing loss output file.")
-            overwrite = input("Are you sure? (Y/N): ")
+            #overwrite = input("Are you sure? (Y/N): ")
 
-            if not overwrite in "yY":
-                o_append = True
-                out_file = open(loss_file, 'a')
-                print("Good choice, buddy\n")
-            else:
-                out_file = open(loss_file, 'w')
-                out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
+            #if not overwrite in "yY":
+                #o_append = True
+                #out_file = open(loss_file, 'a')
+                #print("Good choice, buddy\n")
+            #else:
+            out_file = open(loss_file, 'w')
+            out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
 
         print(f"Outputting loss to: %s\n" % loss_file)
 
     print("%d Batches per Epoch" % np.floor(len(stress_dataset)/b))
     test_acc = []
 
+    loss_threshold = 0.0005
+    min_loss = 2**32
+    curr_lr = lr
+    
     for epoch in range(e):  # loop over the dataset multiple times
         print(f"Current Epoch: %d" % epoch)
         running_loss = 0.0
         losses = []
-        acces = []
+        #acces = []
 
-        all_pred = []
+        #all_pred = []
         
         for i, data in enumerate(dataloader, 0):
-            inputs, labels = data['inputs'].to(device), data['labels'].to(device)
+            inputs, labels = data['inputs'].to(device, dtype = torch.float32), data['labels'].to(device, dtype = torch.float32)
 
-            #print(inputs.shape)
-            
             optimizer.zero_grad()
             outputs = net(inputs)
 
-            labels = labels.to(torch.float32)
-            outputs = outputs.to(torch.float32)
-            
-            #print(labels)
-            
-            loss = criterion(outputs, labels)
+            #labels = torch.tensor(labels.detach().numpy()[:,2:-2,2:-2])
+            #outputs = torch.tensor(outputs.detach().numpy()[:,2:-2,2:-2])
+            #if o:
+            #plt.imshow(labels.cpu().detach().numpy()[0]).write_png(f"data/data/test/labels{epoch}.png")
+            #plt.imshow(outputs.cpu().detach().numpy()[0]).write_png(f"data/data/test/{epoch}.png")    
 
-            pred = outputs
+            loss = criterion(outputs,labels)
 
             #print(pred)
             
-            all_pred.append(np.array(pred.tolist()))
+            #all_pred.append(np.array(pred.tolist()))
             
-            correct = int(pred.eq(labels).sum().item())
-            acc = correct / int(labels.size()[0])
+            #correct = int(pred.eq(labels).sum().item())
+            #acc = correct / int(labels.size()[0])
 
-            losses.append(loss.sum().item())
-            acces.append(acc)
+            losses.append(loss.sum().item()/b)
+            #acces.append(acc)
 
             loss.backward()
             optimizer.step()
             
             running_loss += loss.item()
-            
+
+                  
         if model_num >= 0 and epoch % incr_size == 0:
             print(f"\nSaving model {model_num}\n")
             torch.save(net.state_dict(), f"./output/%s/models/%d.pth" % (target, model_num))
+            plt.imshow(outputs.cpu().detach().numpy()[0]).write_png(f"output/{target}/preds/e{epoch}.png")
             model_num += 1
             #correct, total, all_predictions = test(net, test_dataset, test_loader, device = device)
             #print('Accuracy on test: %.2f%%' % (100 * correct / total))
@@ -217,19 +224,30 @@ def main(args):
         #else:
         test_acc.append(0)
 
-        all_pred = np.array(all_pred)
+        #all_pred = np.array(all_pred)
             
         print("\tMean\tSD")
         lm, lsd = (np.array(losses).mean(), np.array(losses).var()**.5)
-        am, asd = (np.array(acces).mean(), np.array(acces).var()**.5)
+        am, asd = (0,0)
         print(f"Loss\t%.4f\t%.4f" % (lm, lsd))
-        print(f"Acc\t%.4f\t%.4f" % (am, asd))
-        print(f"Pred\t%.4f\t%.4f" % (all_pred.mean(), all_pred.std()))
+        #print(f"Acc\t%.4f\t%.4f" % (am, asd))
+        #print(f"Pred\t%.4f\t%.4f" % (all_pred.mean(), all_pred.std()))
         if o:
             out = [str(i) for i in [epoch, lm, am, test_acc[-1], lsd, asd]]
             out_file.write(",".join(out) + "\n")
 
-        print('Finished Training')
+        if lm < min_loss and lm > min_loss*(1-loss_threshold):
+            min_loss = lm
+            print(f"Curr_lr: {curr_lr}") 
+            
+            #if epoch < 200: curr_lr *= 1.5
+            curr_lr *= .95
+
+            print(f"Updated to {curr_lr}")
+            
+            optimizer = optim.SGD(net.parameters(), lr = curr_lr)
+            
+    print('Finished Training')
 
     torch.save(net.state_dict(), "output/%s/net.pth" % target)
     in_def = open("definitions.py").read()
