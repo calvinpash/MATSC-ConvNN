@@ -86,9 +86,11 @@ def main(args):
         make_folder(f"./output/%s" % target)
         make_folder(f"./output/{target}/preds")
 
-    if append and model_num >= 0:
-        model_num = len(os.listdir(f"./output/{target}"))
-
+    start_epoch = 0
+    if o_append:
+        start_epoch = len(open(f"./output/{target}/loss.csv").read().split("\n"))-2
+        if model_num >= 0:
+            model_num = len(os.listdir(f"./output/{target}/models"))
 
 
     print(f"Epoch Count: %d" % e)
@@ -142,23 +144,28 @@ def main(args):
             o_append = False
             out_file = open(loss_file,'w+')
             out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
-
-        elif not o_append:
+        elif o_append:
+            out_file = open(loss_file, 'a')
+        else:
             print("These settings will overwrite an existing loss output file.")
 
             out_file = open(loss_file, 'w')
             out_file.write("epoch,loss,acc,test_acc,loss_sd,acc_sd\n")
-
+        
+            
         print(f"Outputting loss to: %s\n" % loss_file)
 
     print("%d Batches per Epoch" % np.floor(len(stress_dataset)/b))
     test_acc = []
 
-    loss_threshold = 0.0005
-    min_loss = 2**32
+    loss_threshold = 0.005
+    min_loss = 0
     curr_lr = lr
 
     for epoch in range(e):  # loop over the dataset multiple times
+        if o_append:
+            epoch = start_epoch + epoch
+            
         print(f"Current Epoch: %d" % epoch)
         running_loss = 0.0
         losses = []
@@ -169,6 +176,9 @@ def main(args):
             optimizer.zero_grad()
             outputs = net(inputs)
 
+            #plt.imshow(labels.cpu().detach().numpy()[0]).write_png("hotspots/stress.png")
+            #exit()
+            
             loss = criterion(outputs,labels)
 
             losses.append(loss.sum().item()/b)
@@ -185,6 +195,8 @@ def main(args):
 
             if o:
                 test_lm, test_sd, all_inputs, all_labels, all_outputs = test(net, test_dataset, test_loader, device = device, o = o)
+                if o_append:
+                    epoch = incr_size*model_num
                 make_folder(f"./output/{target}/preds/e{epoch}")
                 for i in range(len(all_labels)):
                     plt.imshow(all_labels[i]).write_png(f"./output/{target}/preds/e{epoch}/stress{model_num}_{i}.png")
@@ -201,7 +213,10 @@ def main(args):
 
             test_acc.append(test_lm)
         elif model_num >= 0:
-            test_acc.append(test_acc[-1])
+            if len(test_acc) > 0:
+                test_acc.append(test_acc[-1])
+            else:
+                test_acc.append(0)
         else:
             test_acc.append(0)
 
@@ -215,16 +230,18 @@ def main(args):
             out = [str(i) for i in [epoch, lm, am, test_acc[-1], lsd, asd]]
             out_file.write(",".join(out) + "\n")
 
+        if min_loss == 0: min_loss = lm
         if lm < min_loss and lm > min_loss*(1-loss_threshold):
             min_loss = lm
-            print(f"Curr_lr: {curr_lr}")
+            
+            #print(f"Curr_lr: {curr_lr}")
 
-            #if epoch < 200: curr_lr *= 1.5
-            curr_lr *= .95
+            #if epoch < 550: curr_lr *= 1.25
+            #else: pass#curr_lr *= .95
 
-            print(f"Updated to {curr_lr}")
+            #print(f"Updated to {curr_lr}")
 
-            optimizer = optim.SGD(net.parameters(), lr = curr_lr)
+            #optimizer = optim.SGD(net.parameters(), lr = curr_lr)
 
     print('Finished Training')
 

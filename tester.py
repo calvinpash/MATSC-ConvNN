@@ -49,7 +49,7 @@ def main(args):
     test_dataset = StressDataset(data_dir=test_data, transform = transforms.Compose([ToTensor()]))
     testloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=nw)
 
-    lm, lsd = test(net, test_dataset, testloader, o = False)
+    lm, lsd = test(net, test_dataset, testloader, o = o)[:2]
     
     print(f"Average loss: %.2f" % (lm))
     print(f"SD of loss: %.2f" % (lsd))
@@ -77,12 +77,12 @@ def test(net, test_dataset, test_loader, o = False, device = 'cpu'):
     lm, lsd = losses.mean(), losses.std()
 
     if o:
-        loss_percs = np.percentile(losses, [0,10,50,90,100])
-        print(f"0th % loss: {loss_percs[0]}")
-        print(f"10th % loss: {loss_percs[1]}")
-        print(f"50th % loss: {loss_percs[2]}")
-        print(f"90th % loss: {loss_percs[3]}")
-        print(f"100th % loss: {loss_percs[4]}")
+        loss_percs = np.percentile(np.round(losses,2), [0,10,50,90,100])
+        print(f"0th \t% loss: {loss_percs[0]}")
+        print(f"10th \t% loss: {loss_percs[1]}")
+        print(f"50th \t% loss: {loss_percs[2]}")
+        print(f"90th \t% loss: {loss_percs[3]}")
+        print(f"100th \t% loss: {loss_percs[4]}")
         print()
 
         idx_percs = np.array([(np.abs(losses - perc)).argmin() for perc in loss_percs])
